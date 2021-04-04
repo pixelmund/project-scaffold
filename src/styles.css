@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apply basic global styles to the body: */
+body {
+	@apply bg-gray-100 font-sans antialiased;
+}
+
+/* Remove trailing margin from forms for some browsers: */
+form {
+	margin-block-end: 0;
+}

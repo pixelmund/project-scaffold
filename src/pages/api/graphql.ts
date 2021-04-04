@@ -1,0 +1,132 @@
+import { schema } from '~schema/index';
+import {
+	getGraphQLParameters,
+	processRequest,
+	renderGraphiQL,
+	shouldRenderGraphiQL,
+} from 'graphql-helix';
+import { NextApiHandler } from 'next';
+import { ExecutionResult, GraphQLError } from 'graphql';
+import { IncomingHttpHeaders } from 'http';
+
+const formatResult = (result: ExecutionResult) => {
+	const formattedResult: ExecutionResult = {
+		data: result.data,
+	};
+
+	if (result.errors) {
+		formattedResult.errors = result.errors.map((error) => {
+			console.log({ graphQLError: error.originalError });
+
+			// Return a generic error message instead
+			return new GraphQLError(
+				error.message,
+				error.nodes,
+				error.source,
+				error.positions,
+				error.path,
+				error.originalError,
+				{
+					code: (error.originalError as any)?.code,
+					path: (error.originalError as any)?.path,
+					...(error.originalError as any)?.extensions,
+				},
+			);
+		});
+	}
+
+	return formattedResult;
+};
+
+interface GraphQLRequest {
+	body?: any;
+	headers: IncomingHttpHeaders;
+	method: string;
+	query: any;
+}
+
+const handler: NextApiHandler = async (req, res) => {
+	console.log(req.body);
+	try {
+		const request: GraphQLRequest = {
+			headers: req.headers,
+			method: req.method ?? 'GET',
+			query: req.query,
+			body: req.body
+		};
+
+		if (shouldRenderGraphiQL(request)) {
+			res.send(renderGraphiQL({ endpoint: '/api/graphql' }));
+		} else {
+			const { operationName, query, variables } = getGraphQLParameters(request);
+
+			const result = await processRequest({
+				operationName,
+				query,
+				variables,
+				request,
+				schema,
+				contextFactory: () => {
+					return {};
+				},
+			});
+
+			if (result.type === 'RESPONSE') {
+				result.headers.forEach(({ name, value }) => res.setHeader(name, value));
+				res.status(result.status);
+				res.json(formatResult(result.payload));
+			} else if (result.type === 'MULTIPART_RESPONSE') {
+				res.writeHead(200, {
+					Connection: 'keep-alive',
+					'Content-Type': 'multipart/mixed; boundary="-"',
+					'Transfer-Encoding': 'chunked',
+				});
+
+				req.on('close', () => {
+					result.unsubscribe();
+				});
+
+				res.write('---');
+
+				await result.subscribe((result) => {
+					const chunk = Buffer.from(JSON.stringify(result), 'utf8');
+					const data = [
+						'',
+						'Content-Type: application/json; charset=utf-8',
+						'Content-Length: ' + String(chunk.length),
+						'',
+						chunk,
+					];
+
+					if (result.hasNext) {
+						data.push('---');
+					}
+
+					res.write(data.join('\r\n'));
+				});
+
+				res.write('\r\n-----\r\n');
+				res.end();
+			} else {
+				res.writeHead(200, {
+					'Content-Type': 'text/event-stream',
+					Connection: 'keep-alive',
+					'Cache-Control': 'no-cache',
+				});
+
+				req.on('close', () => {
+					result.unsubscribe();
+				});
+
+				await result.subscribe((result) => {
+					res.write(`data: ${JSON.stringify(formatResult(result))}\n\n`);
+				});
+			}
+		}
+	} catch (err) {
+		res.statusCode = 500;
+		res.end(err.toString());
+	}
+};
+
+export default handler;

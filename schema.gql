@@ -1,0 +1,9 @@
+scalar Date
+
+type Mutation {
+  testMutation: String!
+}
+
+type Query {
+  test: String!
+}
