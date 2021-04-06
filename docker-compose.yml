@@ -1,0 +1,67 @@
+version: '3'
+
+services:
+    reverse-proxy:
+        restart: unless-stopped
+        image: traefik:v2.2
+        command:
+            - --api.insecure=true
+            - --entrypoints.web.address=:80
+            - --entrypoints.web-secure.address=:443
+            - --providers.docker=true
+            - --providers.file.filename=/etc/traefik/config.yml
+        ports:
+            - '80:80'
+            - '443:443'
+            - '8080:8080'
+        volumes:
+            # So that Traefik can listen to the Docker events
+            - /var/run/docker.sock:/var/run/docker.sock
+            # Map the dynamic conf into the container
+            - ./config/traefik.yml:/etc/traefik/config.yml:ro
+            # Map the certificats into the container
+            - ./config/certs:/etc/certs:ro
+
+    # caddy:
+    #   image: caddy:2.3.0
+    #   restart: unless-stopped
+    #   ports:
+    #     - "80:80"
+    #     - "443:443"
+    #   volumes:
+    #     - $PWD/Caddyfile:/etc/caddy/Caddyfile
+    #     - $PWD/site:/srv
+    #     - caddy_data:/data
+    #     - caddy_config:/config
+
+    postgres:
+        restart: unless-stopped
+        container_name: 'scaffold-postgres'
+        image: 'postgres:11'
+        ports:
+            - '127.0.0.1:5432:5432'
+        volumes:
+            - 'pgdata:/var/lib/postgresql/data/'
+        environment:
+            POSTGRES_PASSWORD: postgres
+
+    next:
+        restart: unless-stopped
+        container_name: 'scaffold-next'
+        image: node:15
+        command: yarn dev
+        ports:
+            - '127.0.0.1:3000:3000'
+        volumes:
+            - .:/srv/next:rw
+        working_dir: /srv/next
+        env_file:
+            - .env
+        depends_on:
+            - postgres
+        labels:
+            - 'traefik.http.routers.next.rule=Host(`scaffold.localhost`)'
+            - 'traefik.http.services.next.loadbalancer.server.port=3000'
+
+volumes:
+    pgdata: {}

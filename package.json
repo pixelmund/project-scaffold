@@ -6,6 +6,7 @@
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start",
+		"setup:certs": "mkcert -install && mkdir -p config/certs && mkcert -cert-file config/certs/local-cert.pem -key-file config/certs/local-key.pem 'scaffold.localhost'",
 		"codegen:graphql": "apollo client:codegen --target typescript --globalTypesFile=src/__generated__/globalTypes.d.ts && rm -rf __generated__"
 	},
 	"license": "MIT",
