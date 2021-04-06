@@ -6,7 +6,6 @@ ARG DATABASE_URL
 WORKDIR /usr/src/app
 
 # Install app dependencies
-COPY .npmrc ./
 COPY yarn.lock ./
 COPY package.json ./
 RUN yarn install
