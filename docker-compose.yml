@@ -22,18 +22,6 @@ services:
             # Map the certificats into the container
             - ./config/certs:/etc/certs:ro
 
-    # caddy:
-    #   image: caddy:2.3.0
-    #   restart: unless-stopped
-    #   ports:
-    #     - "80:80"
-    #     - "443:443"
-    #   volumes:
-    #     - $PWD/Caddyfile:/etc/caddy/Caddyfile
-    #     - $PWD/site:/srv
-    #     - caddy_data:/data
-    #     - caddy_config:/config
-
     postgres:
         restart: unless-stopped
         container_name: 'scaffold-postgres'
@@ -60,7 +48,11 @@ services:
         depends_on:
             - postgres
         labels:
-            - 'traefik.http.routers.next.rule=Host(`scaffold.localhost`)'
+            - 'traefik.http.routers.next-http.rule=Host(`scaffold.localhost`)'
+            - 'traefik.http.routers.next-http.service=next'
+            - 'traefik.http.routers.next-https.rule=Host(`scaffold.localhost`)'
+            - 'traefik.http.routers.next-https.service=next'
+            - 'traefik.http.routers.next-https.tls=true'
             - 'traefik.http.services.next.loadbalancer.server.port=3000'
 
 volumes:
