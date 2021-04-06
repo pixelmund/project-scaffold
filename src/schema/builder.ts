@@ -3,7 +3,7 @@ import SimpleObjectsPlugin from '@giraphql/plugin-simple-objects';
 import ScopeAuthPlugin from '@giraphql/plugin-scope-auth';
 import { IncomingMessage, OutgoingMessage } from 'http';
 
-interface Context {
+export interface Context {
 	req: IncomingMessage;
 	res: OutgoingMessage;
 }
@@ -20,7 +20,7 @@ export const builder = new SchemaBuilder<{
 	};
 }>({
 	plugins: [SimpleObjectsPlugin, ScopeAuthPlugin],
-	authScopes: async ({ req, res }: Context) => ({
+	authScopes: async ({ req, res }) => ({
 		public: true,
 		user: false
 	}),

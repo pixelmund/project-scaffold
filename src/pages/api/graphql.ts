@@ -1,4 +1,5 @@
-import { schema } from '~schema/index';
+import { schema } from '~/schema/index';
+import { Context } from '~/schema/builder';
 import {
 	getGraphQLParameters,
 	processRequest,
@@ -46,13 +47,12 @@ interface GraphQLRequest {
 }
 
 const handler: NextApiHandler = async (req, res) => {
-	console.log(req.body);
 	try {
 		const request: GraphQLRequest = {
 			headers: req.headers,
 			method: req.method ?? 'GET',
 			query: req.query,
-			body: req.body
+			body: req.body,
 		};
 
 		if (shouldRenderGraphiQL(request)) {
@@ -60,67 +60,28 @@ const handler: NextApiHandler = async (req, res) => {
 		} else {
 			const { operationName, query, variables } = getGraphQLParameters(request);
 
-			const result = await processRequest({
+			const result = await processRequest<Context>({
 				operationName,
 				query,
 				variables,
 				request,
 				schema,
 				contextFactory: () => {
-					return {};
+					return {
+						req,
+						res,
+					};
 				},
 			});
+
+			if (result.type !== 'RESPONSE') {
+				throw new Error(`Unsupported response type: "${result.type}"`);
+			}
 
 			if (result.type === 'RESPONSE') {
 				result.headers.forEach(({ name, value }) => res.setHeader(name, value));
 				res.status(result.status);
 				res.json(formatResult(result.payload));
-			} else if (result.type === 'MULTIPART_RESPONSE') {
-				res.writeHead(200, {
-					Connection: 'keep-alive',
-					'Content-Type': 'multipart/mixed; boundary="-"',
-					'Transfer-Encoding': 'chunked',
-				});
-
-				req.on('close', () => {
-					result.unsubscribe();
-				});
-
-				res.write('---');
-
-				await result.subscribe((result) => {
-					const chunk = Buffer.from(JSON.stringify(result), 'utf8');
-					const data = [
-						'',
-						'Content-Type: application/json; charset=utf-8',
-						'Content-Length: ' + String(chunk.length),
-						'',
-						chunk,
-					];
-
-					if (result.hasNext) {
-						data.push('---');
-					}
-
-					res.write(data.join('\r\n'));
-				});
-
-				res.write('\r\n-----\r\n');
-				res.end();
-			} else {
-				res.writeHead(200, {
-					'Content-Type': 'text/event-stream',
-					Connection: 'keep-alive',
-					'Cache-Control': 'no-cache',
-				});
-
-				req.on('close', () => {
-					result.unsubscribe();
-				});
-
-				await result.subscribe((result) => {
-					res.write(`data: ${JSON.stringify(formatResult(result))}\n\n`);
-				});
 			}
 		}
 	} catch (err) {
