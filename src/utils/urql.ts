@@ -22,7 +22,9 @@ export async function preloadQuery(
 	context: GetServerSidePropsContext,
 	options: PreloadQueryOptions,
 ) {
-	const { client, ssr } = createUrqlClient();
+	const { client, ssr } = createUrqlClient({
+		headers: context.req.headers,
+	});
 
 	await client.query(options.query, options.variables).toPromise();
 
@@ -41,11 +43,20 @@ interface ClientWithSsr {
 let urqlClient: ClientWithSsr;
 
 export function useUrqlClient(initialState?: Record<string, any>) {
-	const { client } = useMemo(() => createUrqlClient(initialState), [initialState]);
+	const { client } = useMemo(
+		() => createUrqlClient({ initialState, headers: {} }),
+		[initialState],
+	);
 	return client;
 }
 
-export function createUrqlClient(initialState?: Record<string, any>) {
+export function createUrqlClient({
+	initialState,
+	headers,
+}: {
+	headers: Record<string, any>;
+	initialState?: Record<string, any>;
+}) {
 	let nextClient = urqlClient;
 
 	if (!nextClient) {
@@ -57,6 +68,9 @@ export function createUrqlClient(initialState?: Record<string, any>) {
 			url: !isServerSide ? '/api/graphql' : 'http://localhost:3000/api/graphql',
 			fetchOptions: {
 				credentials: 'include',
+				headers: {
+					...headers,
+				},
 			},
 			exchanges: [dedupExchange, cacheExchange, ssr, fetchExchange],
 		});
